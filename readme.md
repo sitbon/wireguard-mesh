@@ -120,7 +120,7 @@ For a mesh of `N` fully-connected nodes, each node requires one Wireguard server
     - The newly added `prio` node field allows setting of bridge priorities. Defaults are mapped to node indices, which lessens
       the likelihood of arbitrarily bad routing decisions by ensuring that the 0-indexed node is the most likely root node (out of every 16).
   - There are better dynamic routing options, but STP is the simplest to enable.
-- Kernel limitiations might prevent a large number of `ip6gretap` links?
+- Kernel limitations might prevent a large number of `ip6gretap` links?
 
 #### Performance:
 - Links take a slight MTU hit for the GRE tunnels, on top of Wireguard's 80 bytes.
@@ -140,7 +140,7 @@ Keys are never saved anywhere other than each nodes `/etc/wireguard/` config, an
 with meshes that were previously configured.
 
 However, access to all keys is necessarily possible via SSH when configured for this tool,
-so users should take care to properly protect SSH identities within production environments.
+so SSH identities should be properly protected within production environments.
 
 ## Reference
 

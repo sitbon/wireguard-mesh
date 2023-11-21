@@ -1,7 +1,9 @@
 mesh.yaml
 
 __pycache__/
+dist/
 
+*.py[cod]
 .*
 !.gitignore
 !.gitkeep
