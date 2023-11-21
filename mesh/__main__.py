@@ -13,9 +13,8 @@ def main():
     parser.set_defaults(func=lambda _: parser.print_help())
     parser.add_argument(
         "-j", "--json", action="store_true", default=None,
-        help="Use JSON file format instead of YAML (default: auto-detect).",
+        help="Input JSON instead of YAML (default: use file ext).",
     )
-    parser.add_argument("-J", "--json-out", action="store_true", default=False, help="Output JSON instead of YAML.")
     parser.add_argument(
         "-f", "--file", type=argparse.FileType("r"), default="mesh.yaml",
         help="Mesh configuration file or - for stdin (default: mesh.yaml).",
@@ -26,19 +25,29 @@ def main():
     up_parser = subparsers.add_parser("up", help="- Bring up mesh.")
     up_parser.set_defaults(func=_up)
     down_parser = subparsers.add_parser("down", help="- Bring down mesh.")
+    down_parser.add_argument(
+        "-r", "--remove", action="store_true", default=False, help="Remove Wireguard interface configs."
+    )
     down_parser.set_defaults(func=_down)
     sync_parser = subparsers.add_parser("sync", help="- Sync mesh.")
     sync_parser.set_defaults(func=_sync)
     show_parser = subparsers.add_parser("show", help="- Show mesh Wireguard info.")
     show_parser.set_defaults(func=_show)
     info_parser = subparsers.add_parser("info", help="- Show mesh network info.")
+    info_parser.add_argument(
+        "-J", "--json-out",
+        action="store_true", default=False,
+        help="Output JSON instead of YAML."
+    )
     info_parser.set_defaults(func=_info)
 
     args = parser.parse_args()
 
     mesh_dict = (
         yaml.safe_load(args.file)
-        if not args.json or args.json is None and args.file.name.endswith(".yaml") else
+        if not args.json or args.json is None and (
+                args.file.name.endswith(".yaml") or args.file.name.endswith(".yml")
+        ) else
         json.load(args.file)
     )
 
@@ -52,7 +61,7 @@ def _up(mesh: Mesh, args: argparse.Namespace):
 
 
 def _down(mesh: Mesh, args: argparse.Namespace):
-    return int(not mesh.down())
+    return int(not mesh.down(remove=args.remove))
 
 
 def _sync(mesh: Mesh, args: argparse.Namespace):

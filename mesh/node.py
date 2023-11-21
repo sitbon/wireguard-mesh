@@ -37,6 +37,11 @@ class MeshNode(BaseNode):
         return ip_interface(f"{islice(self.mesh.network.hosts(), self.index, None).__next__()}/{self.mesh.network.prefixlen}")
 
     @property
+    def bridge_priority(self) -> int:
+        prio = self.prio if self.prio is not None else -8 + self.index % 16
+        return 32768 + 4096 * prio
+
+    @property
     def info(self) -> dict:
         return dict(
             host=self.remote.host,
@@ -163,6 +168,7 @@ class MeshNode(BaseNode):
         self.config.postup.extend(gretap_up(
             gretap_name=self_gretap_name,
             bridge_name=self_bridge_name,
+            priority=self.bridge_priority,
             local=self_gretap_addr,
             remote=other_gretap_addr,
             bridge_addr=self_bridge_addr,
@@ -171,6 +177,7 @@ class MeshNode(BaseNode):
         other.config.postup.extend(gretap_up(
             gretap_name=other_gretap_name,
             bridge_name=other_bridge_name,
+            priority=other.bridge_priority,
             local=other_gretap_addr,
             remote=self_gretap_addr,
             bridge_addr=other_bridge_addr,

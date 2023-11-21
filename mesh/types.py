@@ -69,3 +69,14 @@ class BaseNode:
     This address is only used to establish a GRE tunnel between mesh nodes.
     It is not used for routing, and should not be changed once the mesh is created (configs written).
     """
+
+    prio: int | None = field(default=None, validator=[lambda _, __, x: x is None or -8 <= x <= 7])
+    """Bridge priority for GRE tunnels, normalized to ``-8 <= prio <= 7``.
+    
+    Calculated as ``32768 + 4096 * prio``.
+    
+    This field is used to create the initial bridge configurations, and should not be changed.
+    
+    When None, the bridge priority will be calculated as ``-8 + (index % 16)``.
+    - Having any difference in bridge priority between nodes helps to avoid bad routing decisions.
+    """

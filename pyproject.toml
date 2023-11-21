@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "wireguard-mesh"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = ["Phillip Sitbon <phillip.sitbon@gmail.com>"]
 readme = "readme.md"

@@ -106,16 +106,30 @@ and has some ability to handle new peers, but deconfiguring/removing peers will 
 
 Hence, the recommended method to handle mesh changes is to perform a full replacement:
 bring down the mesh from the existing configuration, and recreate from the new
-configuration. This has the side-effect of generating all new private and pre-shared keys as well.
+configuration. This has the side effect of generating all new private and pre-shared keys as well.
 
 ### Scalability
 
 For a mesh of `N` fully-connected nodes, each node requires one Wireguard server with `N-1` peers,
 `N-1` GRE tunnels, and one bridge interface for the tunnels. 
 
-Considerations:
+#### Considerations:
 - STP will likely be very slow to learn/adapt with large `N` if links change state frequently.
+  - Sometimes, STP doesn't find the best path between LAN-local nodes and ends up
+    adding unnecessary multi-hop latency, even with only 3 nodes.
+    - The newly added `prio` node field allows setting of bridge priorities. Defaults are mapped to node indices, which lessens
+      the likelihood of arbitrarily bad routing decisions by ensuring that the 0-indexed node is the most likely root node (out of every 16).
+  - There are better dynamic routing options, but STP is the simplest to enable.
 - Kernel limitiations might prevent a large number of `ip6gretap` links?
+
+#### Performance:
+- Links take a slight MTU hit for the GRE tunnels, on top of Wireguard's 80 bytes.
+- Latency differences in ping times were under 500 microseconds on average,
+  when comparing the same LAN vs meshed-over-LAN links.
+  - LAN-local peers can sometimes find local endpoints for clients, even when the original endpoints
+    referred to the same NAT gateway.
+  - STP can't provide any minimum latency or best-path guarantees.
+- `iperf` measurements TBD.
 
 ### Security
 
