@@ -30,7 +30,7 @@ class MeshNode(BaseNode):
 
     @property
     def tag(self) -> str:
-        return f"{self.network_addr.ip}@{self.wg.host}:{self.wg.port}"
+        return f"<{self.index}> {self.network_addr.ip}@{self.wg.host}:{self.wg.port}"
 
     @property
     def network_addr(self) -> IPv4Interface | IPv6Interface:
@@ -87,6 +87,7 @@ class MeshNode(BaseNode):
         Uses the Wireguard UDP listen ports and endpoints to check if the nodes can peer,
         so this can only be reliable when Wireguard is not up on either node.
         """
+        print(f"[{self.tag}] [can_peer] {other.tag}", file=sys.stderr)
         return (not self.remote.is_up and self.remote.udping_from(
             listen_port=self.port,
             endpoint_host=self.wg.host,

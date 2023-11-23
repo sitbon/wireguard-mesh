@@ -24,12 +24,13 @@ def gretap_up(
     ]
 
 
-def gretap_down(gretap_name: str, bridge_name: str) -> list[str]:
+def gretap_down(gretap_name: str, bridge_name: str, *, no_fail: bool = True) -> list[str]:
+    nofail = "|| true" if no_fail else ""
     return [
-        f"ip link set dev {gretap_name} nomaster",
-        f"ip link del dev {gretap_name}",
+        f"ip link set dev {gretap_name} nomaster{nofail}",
+        f"ip link del dev {gretap_name}{nofail}",
         (
             f"if ! ip a | grep -q 'master {bridge_name}'; then "
-            f"  ip link del dev {bridge_name}; fi"
+            f"ip link del dev {bridge_name}{nofail}; fi"
         ),
     ]
