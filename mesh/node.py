@@ -197,9 +197,6 @@ class MeshNode(BaseNode):
     def up(self, *, write: bool | None = None) -> bool:
         remote: WireguardRemote = self.remote
 
-        if remote.is_up:
-            remote.down()
-
         if write or write is None and (write := not remote.config_exists) or (write := remote.config != self.config):
             try:
                 remote.config_write(self.config)
@@ -207,6 +204,11 @@ class MeshNode(BaseNode):
             except Exception as exc:
                 print(f"[{self.tag}] [up] !! config_write failed: {exc}", file=sys.stderr)
                 return False
+
+        if remote.is_up:
+            if not write:
+                return True
+            remote.down()
 
         if isinstance(up := remote.up(), RuntimeError):
             print(f"[{self.tag}] [up] !! {remote.interface}:\n{up}", file=sys.stderr)

@@ -25,7 +25,7 @@ def gretap_up(
 
 
 def gretap_down(gretap_name: str, bridge_name: str, *, no_fail: bool = True) -> list[str]:
-    nofail = "|| true" if no_fail else ""
+    nofail = " || true" if no_fail else ""
     return [
         f"ip link set dev {gretap_name} nomaster{nofail}",
         f"ip link del dev {gretap_name}{nofail}",

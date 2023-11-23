@@ -81,7 +81,57 @@ Nodes are assigned bridge network addresses from the mesh subnet based on their 
 `fd00:0:0:1::1` for `test0` above.
 
 # Usage
-(TODO)
+
+Create a `mesh.yaml` as shown above, and then run:
+```shell
+mesh up
+```
+
+Show mesh info:
+```shell
+mesh info
+```
+
+Bring down the mesh and remove configs:
+```shell
+mesh down -r
+```
+
+### Full Usage
+```commandline
+usage: mesh [-h] [-j] [-J] [-f FILE] [-q] COMMAND ...
+
+Wireguard mesh network manager.
+
+options:
+  -h, --help            show this help message and exit
+  -j, --json            Input JSON instead of YAML (default: use file ext).
+  -J, --json-out        Output JSON instead of YAML.
+  -f FILE, --file FILE  Mesh configuration file or - for stdin (default: mesh.yaml).
+  -q, --quiet           Suppress output.
+
+commands:
+  COMMAND               Command:
+    up                  - Bring up mesh.
+    down                - Bring down mesh.
+    sync                - Sync mesh.
+    show                - Show mesh Wireguard info.
+    info                - Show mesh network info.
+    
+-------------------------------
+usage: mesh up [-h] [-i]
+
+options:
+  -h, --help  show this help message and exit
+  -i, --info  Show mesh info after bringing up.
+  
+-------------------------------
+usage: mesh down [-h] [-r]
+
+options:
+  -h, --help    show this help message and exit
+  -r, --remove  Remove Wireguard interface configs.
+```
 
 ## System Requirements
 Before deploying, the following is expected:
