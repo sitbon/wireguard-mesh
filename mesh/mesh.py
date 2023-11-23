@@ -6,6 +6,7 @@ from attrs.setters import convert
 
 from .types import BaseNode
 from .node import MeshNode
+from .util import RandomIPv6Address
 
 
 @define(kw_only=True, on_setattr=convert)
@@ -59,9 +60,6 @@ class Mesh:
         for index, node in self.nodes.items():
             self.nodes[index] = MeshNode.from_node(self, index, node) if not isinstance(node, MeshNode) else node
 
-        for node1, node2 in self.pairs:
-            node1.peer_with(node2)
-
     def __iter__(self):
         return iter(self.nodes)
 
@@ -81,6 +79,11 @@ class Mesh:
 
     def up(self, *, write: bool | None = None) -> bool | None:
         up_nodes = []
+
+        if any(isinstance(node.addr, RandomIPv6Address) for node in self.nodes.values()):
+            # Some nodes don't have addresses yet, so make sure all peer lists are up-to-date.
+            for node1, node2 in self.pairs:
+                node1.peer_with(node2)
 
         for node in self.nodes.values():
             if node.up(write=write):
