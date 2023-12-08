@@ -1,0 +1,4 @@
+name: mesh
+description: Wireguard Mesh
+runtime: python
+main: mesh/pulumi/main.py

@@ -1,44 +1,42 @@
 from functools import cached_property
 from itertools import islice
-from ipaddress import IPv4Interface, IPv6Interface, ip_interface
 from secrets import token_bytes
 import sys
 
 from attrs import define
-from attrs.setters import convert
 from wireguard_tools import WireguardConfig, WireguardKey
 from wireguard_tools.wireguard_config import WireguardPeer
 
-from .types import BaseNode
+from .types import Interface, RandomIPv6Address, NodeType, ip_interface
 from .remote import WireguardRemote
 from .gretap import gretap_up, gretap_down
-from .util import RandomIPv6Address
 
 
-@define(kw_only=True, slots=False, on_setattr=convert)
-class MeshNode(BaseNode):
+@define(kw_only=True, slots=False)
+class MeshNode(NodeType):
     mesh: "mesh.Mesh"
-    index: int
     config: WireguardConfig | None = None
 
     @cached_property
     def remote(self) -> WireguardRemote:
         return WireguardRemote(
             connect=self.ssh,
-            interface=f"wg-{self.mesh.name}{self.index}",
+            interface=f"wg-{self.mesh.name}{self.idx}",
         )
 
     @property
     def tag(self) -> str:
-        return f"<{self.index}> {self.network_addr.ip}@{self.wg.host}:{self.wg.port}"
+        return f"<{self.idx}> {self.network_addr.ip}@{self.wg.host}:{self.wg.port}"
 
     @property
-    def network_addr(self) -> IPv4Interface | IPv6Interface:
-        return ip_interface(f"{islice(self.mesh.network.hosts(), self.index, None).__next__()}/{self.mesh.network.prefixlen}")
+    def network_addr(self) -> Interface:
+        return ip_interface(
+            f"{islice(self.mesh.network.hosts(), self.idx - 1, None).__next__()}/{self.mesh.network.prefixlen}"
+        )
 
     @property
     def bridge_priority(self) -> int:
-        prio = self.prio if self.prio is not None else -8 + self.index % 16
+        prio = self.prio if self.prio is not None else -8 + (self.idx - 1) % 16
         return 32768 + 4096 * prio
 
     @property
@@ -47,7 +45,7 @@ class MeshNode(BaseNode):
             host=self.remote.host,
             is_up=self.remote.is_up,
             config_exists=self.remote.config_exists,
-            address=str(self.network_addr),
+            address=str(self.network_addr.ip),
         )
 
     def __attrs_post_init__(self):
@@ -69,16 +67,17 @@ class MeshNode(BaseNode):
                 listen_port=self.port,
             )
 
+    def config_write(self):
+        self.remote.config_write(self.config)
+
+    def config_remove(self):
+        self.remote.config_remove()
+
     @classmethod
-    def from_node(cls, mesh: "mesh.Mesh", index: int, node: BaseNode) -> "MeshNode":
+    def from_node(cls, mesh: "mesh.Mesh", node: NodeType) -> "MeshNode":
         return cls(
             mesh=mesh,
-            index=index,
-            ssh=node.ssh,
-            wg=node.wg,
-            port=node.port,
-            addr=node.addr,
-            json=node.json,
+            **node.conf,
         )
 
     def can_peer(self, other: "MeshNode") -> bool:
@@ -112,36 +111,36 @@ class MeshNode(BaseNode):
         )
 
     def peer_with(self, other: "MeshNode"):
-        self_pubkey = self.config.private_key.public_key()
-        other_pubkey = other.config.private_key.public_key()
+        this_pubkey = self.config.private_key.public_key()
+        that_pubkey = other.config.private_key.public_key()
 
-        if self_pubkey == other_pubkey:
+        if this_pubkey == that_pubkey:
             raise ValueError("Cannot peer with self")
 
-        if self_pubkey in other.config.peers and other_pubkey in self.config.peers:
-            self_peer = other.config.peers[self_pubkey]
-            other_peer = self.config.peers[other_pubkey]
+        if this_pubkey in other.config.peers and that_pubkey in self.config.peers:
+            this_peer = other.config.peers[this_pubkey]
+            that_peer = self.config.peers[that_pubkey]
 
-            if self_peer.allowed_ips[0].ip != self.addr or other_peer.allowed_ips[0].ip != other.addr:
+            if this_peer.allowed_ips[0].ip != self.addr or that_peer.allowed_ips[0].ip != other.addr:
                 raise ValueError("Existing peering has different addresses")
 
             # noinspection DuplicatedCode
-            if not self.json and self_peer.friendly_json is not None:
-                self.json = self_peer.friendly_json
-            elif self.json and self_peer.friendly_json != self.json:
-                self_peer.friendly_json = self.json
+            if not self.json and this_peer.friendly_json is not None:
+                self.json = this_peer.friendly_json
+            elif self.json and this_peer.friendly_json != self.json:
+                this_peer.friendly_json = self.json
 
-            if self_peer.friendly_name != self.remote.host:
-                self_peer.friendly_name = self.remote.host
+            if this_peer.friendly_name != self.remote.host:
+                this_peer.friendly_name = self.remote.host
 
             # noinspection DuplicatedCode
-            if not other.json and other_peer.friendly_json is not None:
-                other.json = other_peer.friendly_json
-            elif other.json and other_peer.friendly_json != other.json:
-                other_peer.friendly_json = other.json
+            if not other.json and that_peer.friendly_json is not None:
+                other.json = that_peer.friendly_json
+            elif other.json and that_peer.friendly_json != other.json:
+                that_peer.friendly_json = other.json
 
-            if other_peer.friendly_name != other.remote.host:
-                other_peer.friendly_name = other.remote.host
+            if that_peer.friendly_name != other.remote.host:
+                that_peer.friendly_name = other.remote.host
 
             return
 
@@ -149,49 +148,49 @@ class MeshNode(BaseNode):
             return
 
         preshared_key = WireguardKey(token_bytes(32))
-        self_peer = self.as_peer(preshared_key=preshared_key)
-        other_peer = other.as_peer(preshared_key=preshared_key)
+        this_peer = self.as_peer(preshared_key=preshared_key)
+        that_peer = other.as_peer(preshared_key=preshared_key)
 
-        self.config.add_peer(other_peer)
-        other.config.add_peer(self_peer)
+        self.config.add_peer(that_peer)
+        other.config.add_peer(this_peer)
 
-        self_index = self.index
-        other_index = other.index
-        self_gretap_name = f"{self.mesh.name}{self_index}{other_index}"
-        other_gretap_name = f"{other.mesh.name}{other_index}{self_index}"
-        self_gretap_addr = self.addr
-        other_gretap_addr = other.addr
-        self_bridge_name = f"{self.mesh.name}{self_index}"
-        other_bridge_name = f"{other.mesh.name}{other_index}"
-        self_bridge_addr = self.network_addr
-        other_bridge_addr = other.network_addr
+        this_index = self.idx
+        that_index = other.idx
+        this_gretap_name = f"gt-{self.mesh.name}{that_index}"
+        that_gretap_name = f"gt-{other.mesh.name}{this_index}"
+        this_gretap_addr = self.addr
+        that_gretap_addr = other.addr
+        this_bridge_name = f"br-{self.mesh.name}"
+        that_bridge_name = f"br-{other.mesh.name}"
+        this_bridge_addr = self.network_addr
+        that_bridge_addr = other.network_addr
 
         self.config.postup.extend(gretap_up(
-            gretap_name=self_gretap_name,
-            bridge_name=self_bridge_name,
+            gretap_name=this_gretap_name,
+            bridge_name=this_bridge_name,
             priority=self.bridge_priority,
-            local=self_gretap_addr,
-            remote=other_gretap_addr,
-            bridge_addr=self_bridge_addr,
+            local=this_gretap_addr,
+            remote=that_gretap_addr,
+            bridge_addr=this_bridge_addr,
         ))
 
         other.config.postup.extend(gretap_up(
-            gretap_name=other_gretap_name,
-            bridge_name=other_bridge_name,
+            gretap_name=that_gretap_name,
+            bridge_name=that_bridge_name,
             priority=other.bridge_priority,
-            local=other_gretap_addr,
-            remote=self_gretap_addr,
-            bridge_addr=other_bridge_addr,
+            local=that_gretap_addr,
+            remote=this_gretap_addr,
+            bridge_addr=that_bridge_addr,
         ))
 
         self.config.predown.extend(gretap_down(
-            gretap_name=self_gretap_name,
-            bridge_name=self_bridge_name,
+            gretap_name=this_gretap_name,
+            bridge_name=this_bridge_name,
         ))
 
         other.config.predown.extend(gretap_down(
-            gretap_name=other_gretap_name,
-            bridge_name=other_bridge_name,
+            gretap_name=that_gretap_name,
+            bridge_name=that_bridge_name,
         ))
 
     def up(self, *, write: bool | None = None) -> bool:
