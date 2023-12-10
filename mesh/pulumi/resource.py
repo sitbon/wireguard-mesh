@@ -92,12 +92,12 @@ class MeshProvider(ResourceProvider):
                         failures.append(CheckFailure(f"nodes.{name}.addr", "required"))
                     if (name_ := node.get("name")) is not None and name != name_:
                         failures.append(CheckFailure(f"nodes.{name}.name", "must match key"))
+                    elif name_ is None:
+                        node["name"] = name
                     if node.get("ssh") is None:
                         failures.append(CheckFailure(f"nodes.{name}.ssh", "required"))
                     if node.get("endpoint") is None:
                         failures.append(CheckFailure(f"nodes.{name}.endpoint", "required"))
-
-            Mesh(name=new["name"], network=new["network"], nodes=new["nodes"])
 
         except Exception:
             failures.append(CheckFailure(None, "\n" + traceback.format_exc()))  # type: ignore[arg-type]
