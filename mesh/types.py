@@ -172,7 +172,7 @@ class NodeType(AttrsInstance):
 
         if isinstance(value, dict):
             if key is not None:
-                value.setdefault("name", key)
+                value["name"] = value.setdefault("name", key) or key
             return cls(**value)
 
         raise TypeError(f"Cannot convert {value!r} to {cls.__name__}")

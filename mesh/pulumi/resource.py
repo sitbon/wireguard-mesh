@@ -19,10 +19,10 @@ MeshInfo = Mesh.Info
 @pulumi.input_type
 class MeshNodeArgs:
     addr: Input[str]
-    name: Input[str]
-    ssh: Input[str]
-    endpoint: Input[str]
-    listen_port: Input[int] | None
+    name: Input[str] | None = None
+    ssh: Input[str] | None = None
+    endpoint: Input[str] | None = None
+    listen_port: Input[int] | None = None
 
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
@@ -34,7 +34,7 @@ class MeshNodeArgs:
 
         if isinstance(value, dict):
             if key is not None:
-                value.setdefault("name", key)
+                value["name"] = value.setdefault("name", key) or key
             return cls(**value)
 
         raise TypeError(f"Cannot convert {value!r} to {cls.__name__}")
