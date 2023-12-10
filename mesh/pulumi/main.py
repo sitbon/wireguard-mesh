@@ -1,9 +1,10 @@
 import os
 from pathlib import Path
 
+import pulumi
 import yaml
 
-from mesh.pulumi.provider import Mesh, MeshArgs
+from mesh.pulumi.resource import WireguardMesh, MeshArgs
 
 
 def main():
@@ -13,7 +14,9 @@ def main():
     mesh_file = Path(os.environ.get("PULUMI_MESH_FILE", "mesh.yaml"))
 
     with (base_dir / mesh_file).open() as f:
-        Mesh(mesh_id, MeshArgs(**yaml.safe_load(f))).export()
+        mesh = WireguardMesh(mesh_id, MeshArgs(**yaml.safe_load(f)))
+        pulumi.export(f"{mesh_id}:info", mesh.info)
+        pulumi.export(f"{mesh_id}:nodes", mesh.nodes)
 
 
 if __name__ == "__main__":
