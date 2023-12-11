@@ -6,6 +6,7 @@ from typing import Self
 import pulumi
 from pulumi import Input, Output, ResourceOptions
 from pulumi.dynamic import Resource, ResourceProvider, CreateResult, DiffResult, CheckResult, CheckFailure
+from pulumi.output import Unknown
 
 from mesh import Mesh
 
@@ -138,8 +139,20 @@ class MeshProvider(ResourceProvider):
         if old.get("full") != new.get("full"):
             replaces.append("full")
 
-        if old["nodes"] != new["nodes"]:
-            replaces.append("nodes")
+        old_node_keys = set(old["nodes"].keys())
+
+        for new_node_key, new_node in new["nodes"].items():
+            if (old_node := old["nodes"].get(new_node_key)) is None:
+                replaces.append(f"nodes.{new_node_key}")
+            else:
+                old_node_keys.remove(new_node_key)
+                for attr in {"addr", "name", "ssh", "endpoint", "listen_port"}:
+                    if (ov := old_node.get(attr)) != (nv := new_node.get(attr)):
+                        if not isinstance(ov, Unknown) and not isinstance(nv, Unknown):
+                            replaces.append(f"nodes.{new_node_key}.{attr}")
+
+        if old_node_keys:
+            replaces.extend(f"nodes.{key}" for key in old_node_keys)
 
         return DiffResult(
             changes=bool(replaces),
