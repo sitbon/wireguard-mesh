@@ -7,7 +7,7 @@ from attrs import define, field
 from wireguard_tools import WireguardConfig, WireguardKey
 from wireguard_tools.wireguard_config import WireguardPeer
 
-from .types import RandomIPv6Interface, Interface, NodeType, MeshType, ip_interface, DEFAULT_PORT
+from .types import RandomIPv6Interface, Interface, NodeType, MeshType, DEFAULT_PORT
 from .remote import WireguardRemote
 from .gretap import gretap_up, gretap_down
 
@@ -44,19 +44,12 @@ class MeshNode(NodeType):
         return self._config.addresses[0]
 
     @property
-    def peers(self) -> list[str]:
+    def wg_peers(self) -> list[str]:
         return [peer.friendly_name for peer in self._config.peers.values()]
 
     @property
     def bridge_priority(self) -> int:
-        prio = self.prio if self.prio is not None else -8 + (self.index - 1) % 16
-        return 32768 + 4096 * prio
-
-    # @property
-    # def conf(self) -> dict:
-    #     return super().conf | dict(
-    #         address=str(self.network_addr.ip),
-    #     )
+        return self.prio if self.prio is not None else 32768
 
     class Info(TypedDict):
         host: str
@@ -72,15 +65,23 @@ class MeshNode(NodeType):
             is_up=self.remote.is_up,
             config_exists=self.remote.config_exists,
             address=str(self.addr.ip),
-            peers=self.peers,
+            peers=self.wg_peers,
         )
 
     def __mesh_post_init__(self, mesh: MeshType):
         if self.network != mesh.network:
             raise ValueError(f"Node {self.name!r} address {self.addr} is not in the mesh network {mesh.network}")
+
         if mesh.nodes.get(self.name) is not self:
             raise ValueError(f"Node name {self.name!r} does not match mesh.nodes[{self.name!r}].")
+
+        for other in filter(lambda node: node is not self, mesh.nodes.values()):
+            if self.ip == other.ip:
+                raise ValueError(f"Node {self.name!r} address {self.ip} is already in use by node {other.name!r}")
+
         self._mesh = mesh
+        if mesh.full:
+            self.peers = None
         self.__config_init()
 
     def __config_init(self):
@@ -106,21 +107,21 @@ class MeshNode(NodeType):
     def can_peer(self, other: "MeshNode") -> bool:
         """Check if this node can peer with another node.
 
-        Uses the Wireguard UDP listen ports and endpoints to check if the nodes can peer,
-        so this can only be reliable when Wireguard is not up on either node.
+        This method checks if the other node is in the same mesh, and whether peering is allowed.
         """
-        print(f"[{self}] [can_peer] {other}", file=sys.stderr)
-        return (not self.remote.is_up and self.remote.udping_from(
-            listen_port=self.listen_port or DEFAULT_PORT,
-            endpoint_host=self.endpoint.host,
-            endpoint_port=self.endpoint.port or DEFAULT_PORT,
-            remote=other.remote,
-        )) or (not other.remote.is_up and other.remote.udping_from(
-            listen_port=other.listen_port or DEFAULT_PORT,
-            endpoint_host=other.endpoint.host,
-            endpoint_port=other.endpoint.port or DEFAULT_PORT,
-            remote=self.remote,
-        ))
+        if self._mesh is not other._mesh:
+            return False
+
+        if self._mesh.full:
+            return True
+
+        if self.peers and other.name in self.peers:
+            return True
+
+        if other.peers and self.name in other.peers:
+            return True
+
+        return not self.peers and not other.peers
 
     def as_peer(self, **kwds) -> WireguardPeer:
         return WireguardPeer(
@@ -167,7 +168,7 @@ class MeshNode(NodeType):
 
             return
 
-        if not self._mesh.full and not self.can_peer(other):
+        if not self.can_peer(other):
             return
 
         preshared_key = WireguardKey(token_bytes(32))
@@ -224,7 +225,7 @@ class MeshNode(NodeType):
                 remote.config_write(self._config)
 
             except Exception as exc:
-                print(f"[{self}] [up] !! config_write failed: {exc}", file=sys.stderr)
+                print(f"{self} [up] !! config_write failed: {exc}", file=sys.stderr)
                 return False
 
         if remote.is_up:
@@ -233,13 +234,13 @@ class MeshNode(NodeType):
             remote.down()
 
         if isinstance(up := remote.up(), RuntimeError):
-            print(f"[{self}] [up] !! {remote.interface}:\n{up}", file=sys.stderr)
+            print(f"{self} [up] !! {remote.interface}:\n{up}", file=sys.stderr)
             if write:
                 remote.config_remove()
             return False
 
         else:
-            print(f"[{self}] [up] ++ {remote.interface}:\n{up}", file=sys.stderr)
+            print(f"{self} [up] ++ {remote.interface}:\n{up}", file=sys.stderr)
 
         return True
 
@@ -248,14 +249,14 @@ class MeshNode(NodeType):
 
         if remote.is_up:
             if isinstance(down := remote.down(), RuntimeError):
-                print(f"[{self}] [down] !! {remote.interface}:\n{down}", file=sys.stderr)
+                print(f"{self} [down] !! {remote.interface}:\n{down}", file=sys.stderr)
 
                 if not remote.is_up and remove:
                     remote.config_remove()
                 return False
 
             else:
-                print(f"[{self}] [down] -- {remote.interface}:\n{down}", file=sys.stderr)
+                print(f"{self} [down] -- {remote.interface}:\n{down}", file=sys.stderr)
 
         if remove or remove is None and remote.config_exists:
             remote.config_remove()

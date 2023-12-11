@@ -98,24 +98,25 @@ class NodeType(AttrsInstance):
     can be used.
     """
 
+    peers: list[str] | None = field(default=None, converter=optional(list))
+    """Other nodes to peer with.
+    
+    Ignored and cleared when ``MeshType.full`` is ``True``.
+    
+    Otherwise, only peers with nodes in this list or all nodes if empty on both sides.
+    """
+
     endpoint: Endpoint = field(converter=Endpoint.convert)
     """Public or network-accessible Wireguard endpoint."""
 
     listen_port: int | None = field(default=None, converter=optional(int))
     """Wireguard listen port."""
 
-    json: dict[str, Any] | None = None
+    json: dict[str, Any] | None = field(default=None, converter=optional(dict))
     """Set ``friendly_json`` data for all peers."""
 
-    prio: int | None = field(default=None)
-    """Bridge priority for GRE tunnels, normalized to ``-8 <= prio <= 7``.
-    
-    Calculated as ``32768 + 4096 * prio``.
-    
-    This field is used to create the initial bridge configurations, and should not be changed.
-    
-    When None, the bridge priority will be calculated as ``-8 + ((index-1) % 16)``.
-    - Having any difference in bridge priority between nodes helps to avoid bad routing decisions.
+    prio: int | None = field(default=None, converter=optional(int))
+    """Bridge priority for GRE tunnels.
     """
 
     @cached_property
@@ -162,7 +163,7 @@ class NodeType(AttrsInstance):
 
     @prio.validator  # noqa
     def __prio_validator(self, _: str, value: Any):
-        if value is not None and not -8 <= value <= 7:
+        if value is not None and not 0 <= value <= 65535:
             raise ValueError(f"Invalid bridge priority {value!r}")
 
     @classmethod
@@ -205,9 +206,9 @@ class MeshType(AttrsInstance):
     """
 
     full: bool = True
-    """Peer all node pairs regardless of reachability.
+    """Peer all node pairs.
 
-    When False, checks whether two nodes can reach each other before peering them.
+    When False, check's each node's ``NodeType.peers`` and only peers with those nodes.
     """
 
     nodes: dict[str, NodeType]

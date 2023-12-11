@@ -6,7 +6,6 @@ from typing import Self
 import pulumi
 from pulumi import Input, Output, ResourceOptions
 from pulumi.dynamic import Resource, ResourceProvider, CreateResult, DiffResult, CheckResult, CheckFailure
-from pulumi.output import Unknown
 
 from mesh import Mesh
 
@@ -24,6 +23,8 @@ class MeshNodeArgs:
     ssh: Input[str] | None = None
     endpoint: Input[str] | None = None
     listen_port: Input[int] | None = None
+    peers: Input[list[str]] | None = None
+    prio: Input[int] | None = None
 
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
@@ -116,7 +117,9 @@ class MeshProvider(ResourceProvider):
                 raise RuntimeError("Failed to bring up mesh")
 
             info = mesh.info
-            outs = mesh.asdict(serializer=lambda _, __, v: str(v) if not isinstance(v, int) else v)
+            outs = mesh.asdict(serializer=lambda _, __, v: (
+                str(v) if v and not isinstance(v, (int, float, bool, str, list, dict)) else v
+            ))
 
         except Exception:
             mesh.down(remove=True)
@@ -146,10 +149,9 @@ class MeshProvider(ResourceProvider):
                 replaces.append(f"nodes.{new_node_key}")
             else:
                 old_node_keys.remove(new_node_key)
-                for attr in {"addr", "name", "ssh", "endpoint", "listen_port"}:
-                    if (ov := old_node.get(attr)) != (nv := new_node.get(attr)):
-                        if not isinstance(ov, Unknown) and not isinstance(nv, Unknown):
-                            replaces.append(f"nodes.{new_node_key}.{attr}")
+                for attr in {"addr", "name", "ssh", "endpoint", "listen_port", "peers", "prio"}:
+                    if old_node.get(attr) != new_node.get(attr):
+                        replaces.append(f"nodes.{new_node_key}.{attr}")
 
         if old_node_keys:
             replaces.extend(f"nodes.{key}" for key in old_node_keys)

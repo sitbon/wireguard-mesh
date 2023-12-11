@@ -9,23 +9,29 @@ Personally, I've developed this package for use with Pulumi and RKE to create my
 which spans across two LANs and multiple (Linode) cloud nodes.
 
 I wanted to minimize configuration requirements to the bare minimum, so the only thing needed to get a 
-mesh going with this tool is a `mesh.yaml` file defining the network, nodes, and SSH connection parameters.
+mesh going with this tool is a `mesh.yaml` file defining a minimal set of parameters for each node.
 
 Otherwise, users are only expected to pre-configure SSH connectivity and any necessary NAT UDP ports mappings for Wireguard.
 
 ## Features
-- Fully-connected topology or reachability-based peering.
+- Fully-connected topology or user-defined peering.
 - SSH-based peer configuration.
   - Automatic public, private and pre-shared key generation.
   - The configuring node only needs remote root/sudo access, and does not store private keys or any additional state.
 - Peerwise `gretap`/`ip6gretap` L2 links over Wireguard.
-- `iproute2`-based bridging with STP enabled.
+- `iproute2`-based bridging with STP enabled and configurable priorities.
 
 ### Non-Features
 What this doesn't do:
 - Dynamically add/remove nodes or rotate keys without bringing down the mesh.
 - Configure IP forwarding, Internet routing, or DNS.
 - Support clients, gateways/egress/ingress, or anything other than a fully- or mostly-connected mesh of servers.
+
+### TODO
+
+- [ ] Add `--dry-run` flag to preview changes.
+- [ ] Add more accessibility to Wireguard config options.
+- [ ] Support some method of manual insecure interface bridging, e.g. for VPCs/VLANs.
 
 ## How It Works
 
@@ -62,23 +68,35 @@ Configuration files can also be provided from `stdin`, and JSON-formatting is av
 ```yaml
 name: test
 network: fd00:0:0:1::/64
+full: false  # Optional: default is true. Set to false for manual peering.
 nodes:
-  0:
+  mesh0:
+    addr: fd00:0:0:1::1/64
     ssh: test0
-    wg: lan1.example.com
-  1:
+    endpoint: lan1.example.com
+    peers:  # When unset or empty and full=false, all other nodes are peered.
+      - mesh1
+      - mesh2
+      - mesh3
+  mesh1:
+    addr: fd00:0:0:1::2/64
     ssh: test1
-    wg: lan1.example.com:51821
-  2:
+    endpoint: lan1.example.com:51821
+  mesh2:
+    addr: fd00:0:0:1::3/64
     ssh: test2
-    wg: lan2.example.com
-  3:
+    endpoint: lan2.example.com
+    listen_port: 51850
+  mesh3:
+    addr: fd00:0:0:1::4/64
     ssh: test3
-    wg: test3.cloud.example.com
+    endpoint: test3.cloud.example.com
+    prio: 100
 ```
 
-Nodes are assigned bridge network addresses from the mesh subnet based on their index, for example
-`fd00:0:0:1::1` for `test0` above.
+Prior versions supported auto-assignment of addresses, but this has been removed in favor of explicit configuration.
+
+Each node's `addr` field must be a unique interface address within the network.
 
 # Usage
 
